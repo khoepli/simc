@@ -112,7 +112,7 @@ void surprisingly_palatable_feast( special_effect_t& effect )
 void feast_of_gluttonous_hedonism( special_effect_t& effect )
 {
   init_feast( effect,
-              {{STAT_STRENGTH, 327707}, {STAT_STAMINA, 327707}, {STAT_INTELLECT, 327708}, {STAT_AGILITY, 327709}} );
+              {{STAT_STRENGTH, 327706}, {STAT_STAMINA, 327707}, {STAT_INTELLECT, 327708}, {STAT_AGILITY, 327709}} );
 }
 
 // For things that require check for oils, the effect must be passed as first parameter of the constructor, but this
@@ -408,7 +408,7 @@ void darkmoon_deck_voracity( special_effect_t& effect )
   effect.execute_action   = new voracious_hunger_t( effect );
 }
 
-void nathria_trinket_184027( special_effect_t& effect )
+void stone_legion_heraldry( special_effect_t& effect )
 {
   double amount   = effect.driver()->effectN( 1 ).average( effect.item );
   unsigned allies = effect.player->sim->shadowlands_opts.stone_legionnaires_in_party;
@@ -418,6 +418,51 @@ void nathria_trinket_184027( special_effect_t& effect )
 
   // Disable further effect handling
   effect.type = SPECIAL_EFFECT_NONE;
+}
+
+void cabalists_effigy( special_effect_t& effect )
+{
+  auto buff = buff_t::find( effect.player, "crimson_chorus" );
+  if ( !buff )
+  {
+    auto mul =
+        1.0 + effect.driver()->effectN( 2 ).percent() * effect.player->sim->shadowlands_opts.crimson_choir_in_party;
+
+    buff = make_buff<stat_buff_t>( effect.player, "crimson_chorus", effect.trigger(), effect.item )
+      ->add_stat( STAT_CRIT_RATING, effect.driver()->effectN( 1 ).average( effect.item ) * mul )
+      ->set_period( effect.trigger()->duration() )
+      ->set_duration( effect.trigger()->duration() * effect.trigger()->max_stacks() );
+  }
+
+  effect.player->register_combat_begin( [ buff ]( player_t* p ) {
+    make_repeating_event( *p->sim, 1_min, [ buff ]() {
+      buff->trigger();
+    } );
+  } );
+}
+
+void dreadfire_vessel( special_effect_t& effect )
+{
+  struct dreadfire_vessel_proc_t : public proc_spell_t
+  {
+    dreadfire_vessel_proc_t( const special_effect_t& e ) : proc_spell_t( e )
+    {
+      // TODO: determine if the damage in the spell_data is for each flame or all 3 combined
+      base_multiplier = 1.0 / 3.0;
+      // TODO: determine actual travel speed of the flames (data has 1.5yd/s)
+      travel_speed = 0.0;
+    }
+
+    void execute() override
+    {
+      // TODO: determine the how the three flames are fired
+      proc_spell_t::execute();
+      proc_spell_t::execute();
+      proc_spell_t::execute();
+    }
+  };
+
+  effect.execute_action = create_proc_action<dreadfire_vessel_proc_t>( "dreadfire_vessel", effect );
 }
 }  // namespace items
 
@@ -447,7 +492,9 @@ void register_special_effects()
     unique_gear::register_special_effect( 334058, items::darkmoon_deck_putrescence );
     unique_gear::register_special_effect( 329446, items::darkmoon_deck_shuffle );
     unique_gear::register_special_effect( 331624, items::darkmoon_deck_voracity );
-    unique_gear::register_special_effect( 344686, items::nathria_trinket_184027 );
+    unique_gear::register_special_effect( 344686, items::stone_legion_heraldry );
+    unique_gear::register_special_effect( 344806, items::cabalists_effigy );
+    unique_gear::register_special_effect( 344732, items::dreadfire_vessel );
 }
 
 void register_target_data_initializers( sim_t& sim )

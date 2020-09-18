@@ -1774,17 +1774,6 @@ struct spitting_cobra_t final : public hunter_pet_t
 
     hunter_pet_t::summon( duration );
   }
-
-  void schedule_ready( timespan_t delta_time, bool waiting ) override
-  {
-    /* nuoHep 2017-02-15 data from a couple krosus logs from wcl
-     *      N           Min           Max        Median           Avg        Stddev
-     *   2146           0.0         805.0         421.0     341.03262     168.89531
-     */
-    if ( last_foreground_action )
-      delta_time += timespan_t::from_millis( rng().gauss( 340, 170 ) );
-    hunter_pet_t::schedule_ready( delta_time, waiting );
-  }
 };
 
 namespace actions
@@ -3054,13 +3043,6 @@ struct chimaera_shot_base_t: public hunter_ranged_attack_t
         parse_effect_data( p -> find_spell( 204304 ) -> effectN( 1 ) );
     }
 
-    void execute() override
-    {
-      hunter_ranged_attack_t::execute();
-
-      p() -> trigger_lethal_shots();
-    }
-
     double action_multiplier() const override
     {
       double am = hunter_ranged_attack_t::action_multiplier();
@@ -3096,6 +3078,7 @@ struct chimaera_shot_base_t: public hunter_ranged_attack_t
     hunter_ranged_attack_t::execute();
 
     p() -> trigger_calling_the_shots();
+    p() -> trigger_lethal_shots();
   }
 
   void schedule_travel( action_state_t* s ) override

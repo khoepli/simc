@@ -146,6 +146,7 @@ public:
     buff_t* sunrise_technique;
 
     // Covenant Abilities
+    buff_t* fallen_monk_keg_smash;
     buff_t* weapons_of_order;
 
     // Shadowland Legendaries
@@ -2950,11 +2951,7 @@ public:
 
     double cost() const override
     {
-      double c = melee_attack_t::cost();
-
-      c = 0;
-
-      return c;
+      return 0;
     }
   };
 
@@ -3104,8 +3101,8 @@ public:
       parse_options( options_str );
 
       aoe                     = -1;
-      attack_power_mod.direct = p->o()->spec.keg_smash->effectN( 2 ).ap_coeff();
-      radius                  = p->o()->spec.keg_smash->effectN( 2 ).radius();
+      attack_power_mod.direct = p->o()->passives.fallen_monk_keg_smash->effectN( 2 ).ap_coeff();
+      radius                  = p->o()->passives.fallen_monk_keg_smash->effectN( 2 ).radius();
       cooldown->duration      = timespan_t::from_seconds( 8 );
       trigger_gcd             = timespan_t::from_seconds( 1.5 );
       owner                   = p->o();
@@ -3131,7 +3128,7 @@ public:
 
       melee_attack_t::impact( s );
 
-      owner->get_target_data( s->target )->debuff.keg_smash->trigger();
+      owner->get_target_data( s->target )->debuff.fallen_monk_keg_smash->trigger();
     }
   };
 
@@ -3168,7 +3165,8 @@ public:
     {
       spell_t::impact( s );
 
-      if ( owner->get_target_data( s->target )->debuff.keg_smash->up() )
+      if ( owner->get_target_data( s->target )->debuff.keg_smash->up() ||
+           owner->get_target_data( s->target )->debuff.fallen_monk_keg_smash->up() )
       {
         dot_action->target = s->target;
         dot_action->execute();
@@ -3206,6 +3204,9 @@ public:
   {
     if ( name == "auto_attack" )
       return new auto_attack_t( this, options_str );
+
+    if ( name == "clash" )
+      return new fallen_monk_clash_t( this, options_str );
 
     if ( name == "keg_smash" )
       return new fallen_monk_keg_smash_t( this, options_str );
@@ -3348,11 +3349,7 @@ public:
 
     double cost() const override
     {
-      double c = heal_t::cost();
-
-      c = 0;
-
-      return c;
+      return 0;
     }
   };
 
@@ -6623,7 +6620,7 @@ struct breath_of_fire_t : public monk_spell_t
 
     monk_td_t& td = *this->td( s->target );
 
-    if ( td.debuff.keg_smash->up() )
+    if ( td.debuff.keg_smash->up() || td.debuff.fallen_monk_keg_smash->up() )
     {
       dot_action->target = s->target;
       dot_action->execute();
@@ -7293,12 +7290,65 @@ struct weapons_of_order_t : public monk_spell_t
 
 struct fallen_order_t : public monk_spell_t
 {
-  timespan_t summon_interval;
-  timespan_t summon_duration;
+  enum fallen_monk_e
+  {
+    FALLEN_MONK_WINDWALKER,
+    FALLEN_MONK_BREWMASTER,
+    FALLEN_MONK_MISTWEAVER
+  };
+
+  struct fallen_order_event_t : public event_t
+  {
+    std::vector<std::pair<fallen_monk_e, timespan_t>> fallen_monks;
+    timespan_t summon_interval;
+    monk_t* p;
+
+    fallen_order_event_t( monk_t* monk, std::vector<std::pair<fallen_monk_e, timespan_t>> fm,
+        timespan_t interval )
+      : event_t( *monk, interval ),
+        fallen_monks( fm ),
+        summon_interval( interval ),
+        p( monk )
+    {
+    }
+
+    virtual const char* name() const override
+    {
+      return "fallen_order_summon";
+    }
+
+    void execute() override
+    {
+      if ( fallen_monks.empty() )
+        return;
+
+      std::pair<fallen_monk_e, timespan_t> fallen_monk_pair;
+
+      fallen_monk_pair = fallen_monks.front();
+
+      switch (fallen_monk_pair.first)
+      {
+        case FALLEN_MONK_WINDWALKER:
+          p->pets.fallen_monk_ww.spawn( fallen_monk_pair.second, 1 );
+          break;
+        case FALLEN_MONK_BREWMASTER:
+          p->pets.fallen_monk_brm.spawn( fallen_monk_pair.second, 1 );
+          break;
+        case FALLEN_MONK_MISTWEAVER:
+          p->pets.fallen_monk_mw.spawn( fallen_monk_pair.second, 1 );
+          break;
+        default:
+          break;
+      }
+      fallen_monks.erase( fallen_monks.begin() );
+
+      if ( !fallen_monks.empty() )
+        make_event<fallen_order_event_t>( sim(), p, fallen_monks, summon_interval );
+    }
+  };
+
   fallen_order_t( monk_t& p, const std::string& options_str )
-    : monk_spell_t( "fallen_order", &p, p.covenant.venthyr ), 
-      summon_interval( timespan_t::from_seconds( p.covenant.venthyr->effectN( 2 ).base_value() * 2 ) ),
-      summon_duration( timespan_t::from_seconds( p.covenant.venthyr->effectN( 4 ).base_value() ) )
+    : monk_spell_t( "fallen_order", &p, p.covenant.venthyr )
   {
     parse_options( options_str );
     harmful     = false;
@@ -7309,47 +7359,72 @@ struct fallen_order_t : public monk_spell_t
   void execute() override
   {
     monk_spell_t::execute();
+
+    specialization_e spec      = p()->specialization();
+    timespan_t summon_duration = timespan_t::from_seconds( p()->covenant.venthyr->effectN( 4 ).base_value() );
     timespan_t primary_duration =
         summon_duration + timespan_t::from_seconds( p()->covenant.venthyr->effectN( 3 ).base_value() );
-/*    for ( int i = 0; i < 11; i++ )
+    std::vector<std::pair<fallen_monk_e, timespan_t>> fallen_monks;
+
+    // Monks alternate summoning primary spec and non-primary spec
+    // 11 summons in total (6 primary and a mix of 5 non-primary)
+    // for non-primary, there is a 50% chance one or the other non-primary is summoned
+    switch ( spec )
     {
-      switch ( p()->specialization() )
+      case MONK_WINDWALKER:
+        fallen_monks.push_back( std::make_pair( FALLEN_MONK_WINDWALKER, primary_duration ) );
+        break;
+      case MONK_BREWMASTER:
+        fallen_monks.push_back( std::make_pair( FALLEN_MONK_BREWMASTER, primary_duration ) );
+        break;
+      case MONK_MISTWEAVER:
+        fallen_monks.push_back( std::make_pair( FALLEN_MONK_MISTWEAVER, primary_duration ) );
+        break;
+      default:
+        break;
+    }
+
+    for ( int i = 0; i < 10; i++ )
+    {
+      switch ( spec )
       {
         case MONK_WINDWALKER:
         {
           if ( i % 2 )
-            p()->pets.fallen_monk_ww.spawn( primary_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_WINDWALKER, primary_duration ) );
           else if ( rng().roll( 0.5 ) )
-            p()->pets.fallen_monk_brm.spawn( summon_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_BREWMASTER, summon_duration ) );
           else
-            p()->pets.fallen_monk_mw.spawn( summon_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_MISTWEAVER, summon_duration ) );
           break;
         }
         case MONK_BREWMASTER:
         {
           if ( i % 2 )
-            p()->pets.fallen_monk_brm.spawn( primary_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_BREWMASTER, primary_duration ) );
           else if ( rng().roll( 0.5 ) )
-            p()->pets.fallen_monk_ww.spawn( summon_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_WINDWALKER, summon_duration ) );
           else
-            p()->pets.fallen_monk_mw.spawn( summon_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_MISTWEAVER, summon_duration ) );
           break;
         }
         case MONK_MISTWEAVER:
         {
           if ( i % 2 )
-            p()->pets.fallen_monk_mw.spawn( primary_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_MISTWEAVER, primary_duration ) );
           else if ( rng().roll( 0.5 ) )
-            p()->pets.fallen_monk_ww.spawn( summon_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_WINDWALKER, summon_duration ) );
           else
-            p()->pets.fallen_monk_brm.spawn( summon_duration, 1 );
+            fallen_monks.push_back( std::make_pair( FALLEN_MONK_BREWMASTER, summon_duration ) );
           break;
         }
         default:
           break;
       }
     }
-    */
+
+    make_event<fallen_order_event_t>(
+        *sim, p(), fallen_monks, timespan_t::from_seconds( p()->covenant.venthyr->effectN( 2 ).base_value() * 2 ) );
   }
 };
 }  // namespace spells
@@ -8567,6 +8642,9 @@ monk_td_t::monk_td_t( player_t* target, monk_t* p )
   debuff.sunrise_technique = make_buff( *this, "sunrise_technique_debuff", p->find_spell( 273299 ) );
 
   // Covenant Abilities
+  debuff.fallen_monk_keg_smash = make_buff( *this, "fallen_monk_keg_smash", p->passives.fallen_monk_keg_smash )
+                                     ->set_default_value_from_effect( 3 );
+
   debuff.weapons_of_order = make_buff( *this, "weapons_of_order", p->find_spell( 312106 ) )
                                 ->set_default_value_from_effect( 1 );
 
@@ -9449,7 +9527,7 @@ void monk_t::create_buffs()
 
   buff.celestial_flames = make_buff( this, "celestial_flames", talent.celestial_flames->effectN( 1 ).trigger() )
                               ->set_chance( talent.celestial_flames->proc_chance() )
-                              ->set_default_value_from_effect( 2 );
+                              ->set_default_value( talent.celestial_flames->effectN( 2 ).percent() );
 
   buff.elusive_brawler = make_buff( this, "elusive_brawler", mastery.elusive_brawler->effectN( 3 ).trigger() )
                              ->add_invalidate( CACHE_DODGE );

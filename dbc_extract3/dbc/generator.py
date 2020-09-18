@@ -1224,6 +1224,8 @@ class SpellDataGenerator(DataGenerator):
          311465, 311466, 311467, 311468, 311469, 311470,
          # Darkmoon Deck Voracity
          311484, 311485, 311486, 311487, 311488, 311489,
+         # Soul Igniter Trinket
+         345215,
          # Soulbinds
          321524, # Niya's Tools: Poison (night fae/niya)
          320130, 320212, # Social Butterfly vers buff (night fae/dreamweaver)
@@ -1361,6 +1363,7 @@ class SpellDataGenerator(DataGenerator):
             ( 340582, 0 ), ( 340583, 0 ), ( 340584, 0 ), # Guile Charm legendary buffs
             ( 340600, 0 ), ( 340601, 0 ), ( 340603, 0 ), # Finality legendary buffs
             ( 341111, 0 ),          # Akaari's Soul Fragment legendary debuff
+            ( 345121, 0 ),          # Akaari's Soul Fragment Shadowstrike clone
             ( 340587, 0 ),          # Concealed Blunderbuss legendary buff
             ( 340573, 0 ),          # Greenskin's Wickers legendary buff
             ( 340431, 0 ),          # Doomblade legendary debuff
