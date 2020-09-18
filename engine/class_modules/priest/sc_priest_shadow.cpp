@@ -872,9 +872,20 @@ struct vampiric_touch_t final : public priest_spell_t
   }
 };
 
+using residual_action_t = residual_action::residual_periodic_action_t<priest_spell_t>;
+
 // ==========================================================================
 // Devouring Plague
 // ==========================================================================
+struct devouring_plague_dot_t final : public residual_action_t
+{
+  devouring_plague_dot_t( util::string_view n, priest_t* p )
+    : residual_action_t( n, p, p->find_class_spell( "Devouring Plague" ) )
+  {
+    callbacks = true;
+  }
+};
+
 struct devouring_plague_t final : public priest_spell_t
 {
   bool casted;
@@ -917,6 +928,11 @@ struct devouring_plague_t final : public priest_spell_t
   void impact( action_state_t* s ) override
   {
     priest_spell_t::impact( s );
+
+    if ( result_is_hit( s->result ) )
+    {
+      priest().trigger_devouring_plague_dot( s );
+    }
 
     // Damnation does not trigger a SA - 2020-08-08
     if ( casted )
@@ -2539,4 +2555,10 @@ void priest_t::trigger_psychic_link( action_state_t* s )
     }
   }
 }
+
+void priest_t::trigger_devouring_plague_dot( action_state_t* s )
+{
+  residual_action::trigger( action.devouring_plague_dot, s->target, s->result_total );
+}
+
 }  // namespace priestspace
