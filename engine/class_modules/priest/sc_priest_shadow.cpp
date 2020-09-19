@@ -880,9 +880,12 @@ using residual_action_t = residual_action::residual_periodic_action_t<priest_spe
 struct devouring_plague_dot_t final : public residual_action_t
 {
   devouring_plague_dot_t( priest_t& p )
-    : residual_action_t( "devouring_plague_dot", p, p.find_class_spell( "Devouring Plague" ) )
+    : residual_action_t( "devouring_plague", p, p.find_class_spell( "Devouring Plague" ) )
   {
-    callbacks = true;
+    // TODO figure out how to make this a child action from DP
+    callbacks     = true;
+    tick_zero     = false;
+    tick_may_crit = may_crit = true;
   }
 };
 
@@ -893,10 +896,12 @@ struct devouring_plague_t final : public priest_spell_t
   devouring_plague_t( priest_t& p, bool _casted = false )
     : priest_spell_t( "devouring_plague", p, p.find_class_spell( "Devouring Plague" ) )
   {
-    casted        = _casted;
-    may_crit      = true;
-    tick_zero     = false;
-    tick_may_crit = true;
+    casted   = _casted;
+    may_crit = true;
+
+    // Turn off DoT
+    dot_duration = timespan_t::from_seconds( 0 );
+    base_td = base_td_multiplier = 0;
   }
 
   devouring_plague_t( priest_t& p, util::string_view options_str ) : devouring_plague_t( p, true )
@@ -974,9 +979,7 @@ struct void_bolt_t final : public priest_spell_t
 
       if ( priest().talents.legacy_of_the_void->ok() )
       {
-        // TODO: remove this hard code once it is in the game
-        // Assuming how this works based on the blue post
-        td.dots.devouring_plague->refresh_duration();
+        priest().trigger_devouring_plague_dot( s );
       }
 
       if ( priest().conduits.dissonant_echoes->ok() && priest().buffs.voidform->check() )
@@ -1270,7 +1273,7 @@ struct void_torrent_t final : public priest_spell_t
 
     td.dots.shadow_word_pain->refresh_duration();
     td.dots.vampiric_touch->refresh_duration();
-    td.dots.devouring_plague->refresh_duration();
+    priest().trigger_devouring_plague_dot( s );
   }
 };
 
@@ -2503,7 +2506,7 @@ void priest_t::generate_apl_shadow()
 void priest_t::init_background_actions_shadow()
 {
   active_spells.devouring_plague_dot = new actions::spells::devouring_plague_dot_t( *this );
-  
+
   if ( specs.shadowy_apparitions->ok() )
   {
     active_spells.shadowy_apparitions = new actions::spells::shadowy_apparition_spell_t( *this );
