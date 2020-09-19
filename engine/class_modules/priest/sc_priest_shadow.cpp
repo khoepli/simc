@@ -887,6 +887,14 @@ struct devouring_plague_dot_t final : public residual_action_t
     tick_zero     = false;
     tick_may_crit = may_crit = true;
   }
+
+  void init() override
+  {
+    residual_action_t::init();
+
+    snapshot_flags |= STATE_CRIT;
+    update_flags   |= STATE_TGT_CRIT;
+  }
 };
 
 struct devouring_plague_t final : public priest_spell_t
