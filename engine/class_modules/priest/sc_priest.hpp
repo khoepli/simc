@@ -36,6 +36,7 @@ struct summon_pet_t;
 struct summon_shadowfiend_t;
 struct summon_mindbender_t;
 struct ascended_eruption_t;
+struct devouring_plague_dot_t;
 struct wrathful_faerie_t;
 struct psychic_link_t;
 }  // namespace spells
@@ -368,6 +369,7 @@ public:
   {
     propagate_const<actions::spells::mind_sear_tick_t*> mind_sear_tick;
     propagate_const<actions::spells::shadowy_apparition_spell_t*> shadowy_apparitions;
+    propagate_const<actions::spells::devouring_plague_dot_t*> devouring_plague_dot;
     propagate_const<actions::spells::psychic_link_t*> psychic_link;
     propagate_const<actions::spells::wrathful_faerie_t*> wrathful_faerie;
   } active_spells;
@@ -419,7 +421,6 @@ public:
   struct actions_t
   {
     actions::spells::ascended_eruption_t* ascended_eruption;
-    action_t* devouring_plague_dot;
   } action;
 
   // Azerite

@@ -879,8 +879,8 @@ using residual_action_t = residual_action::residual_periodic_action_t<priest_spe
 // ==========================================================================
 struct devouring_plague_dot_t final : public residual_action_t
 {
-  devouring_plague_dot_t( util::string_view n, priest_t* p )
-    : residual_action_t( n, p, p->find_class_spell( "Devouring Plague" ) )
+  devouring_plague_dot_t( priest_t& p )
+    : residual_action_t( "devouring_plague_dot", p, p.find_class_spell( "Devouring Plague" ) )
   {
     callbacks = true;
   }
@@ -2502,6 +2502,8 @@ void priest_t::generate_apl_shadow()
 
 void priest_t::init_background_actions_shadow()
 {
+  active_spells.devouring_plague_dot = new actions::spells::devouring_plague_dot_t( *this );
+  
   if ( specs.shadowy_apparitions->ok() )
   {
     active_spells.shadowy_apparitions = new actions::spells::shadowy_apparition_spell_t( *this );
@@ -2558,7 +2560,7 @@ void priest_t::trigger_psychic_link( action_state_t* s )
 
 void priest_t::trigger_devouring_plague_dot( action_state_t* s )
 {
-  residual_action::trigger( action.devouring_plague_dot, s->target, s->result_total );
+  residual_action::trigger( active_spells.devouring_plague_dot, s->target, s->result_total );
 }
 
 }  // namespace priestspace
